@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# Check if .env contains API_KEY
+if grep -q "API_KEY" .env; then
+  echo "Error: .env file contains API_KEY. Commit aborted."
+  exit 1
+fi
+
+# Allow commit if no API_KEY is found
+exit 0
