@@ -1,0 +1,9 @@
+services:
+  dhewm3ded:
+    image: dhewm3ded:latest
+    container_name: dhewm3ded
+    volumes:
+      - ./game:/game
+    ports:
+      - 27666:27666
+    restart: unless-stopped
