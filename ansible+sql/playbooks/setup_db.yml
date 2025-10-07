@@ -1,0 +1,13 @@
+---
+
+- name: Setup MySQL master
+  hosts: master
+  become: true
+  roles:
+    - mysql-master
+
+- name: Setup MySQL slave
+  hosts: slave
+  become: true
+  roles:
+    - mysql-slave

@@ -1,0 +1,51 @@
+-- Creating the database
+DROP DATABASE IF EXISTS example_db;
+
+CREATE DATABASE IF NOT EXISTS example_db;
+USE example_db;
+
+-- Creating the users table
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Creating the products table
+CREATE TABLE products (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    price DECIMAL(10, 2) NOT NULL,
+    stock_quantity INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Creating the orders table
+CREATE TABLE orders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    total_amount DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Inserting sample data into users table
+INSERT INTO users (first_name, last_name, email) VALUES
+('John', 'Doe', 'john.doe@example.com'),
+('Jane', 'Smith', 'jane.smith@example.com'),
+('Alice', 'Johnson', 'alice.johnson@example.com');
+
+-- Inserting sample data into products table
+INSERT INTO products (name, description, price, stock_quantity) VALUES
+('Laptop', 'High-performance laptop', 999.99, 50),
+('Smartphone', 'Latest model smartphone', 699.99, 100),
+('Headphones', 'Wireless noise-canceling headphones', 199.99, 200);
+
+-- Inserting sample data into orders table
+INSERT INTO orders (user_id, total_amount) VALUES
+(1, 1199.98),
+(2, 699.99),
+(3, 199.99);

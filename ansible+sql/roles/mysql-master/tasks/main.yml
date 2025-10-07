@@ -1,0 +1,73 @@
+---
+- name: Install MySQL server and dependencies
+  apt:
+    name: mysql-server
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Ensure MySQL is started and enabled
+  service:
+    name: "{{ 'mysqld' if ansible_os_family == 'RedHat' else 'mysql' }}"
+    enabled: true
+  become: true
+
+- name: Deploy MySQL configuration for master
+  template:
+    src: my.cnf.j2
+    dest: /etc/mysql/my.cnf
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    server_id: 1
+    binlog_do_db: "{{ test_db_name | default('example_db') }}"
+  register: mysql_conf
+  notify: Restart MySQL
+  become: true
+
+- name: Deploy master replication SQL template
+  template:
+    src: master_setup.sql.j2
+    dest: /tmp/master_setup.sql
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    replication_user: "{{ mysql_repl_user }}"
+    replication_password: "{{ mysql_repl_pass }}"
+    private_ip: "{{ slave_private_ip }}"
+  become: true
+
+- name: Export example_db
+  shell: "mysql < /tmp/master_setup.sql"
+  become: true
+
+- name: Deploy logical SQL dump
+  template:
+    src: example_db.sql.j2
+    dest: /tmp/example_db.sql
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
+- name: Execute db import
+  shell: "mysql < /tmp/example_db.sql"
+  become: true
+
+- name: Get db dump with log position and other instructions
+  shell: "mysqldump --master-data=1 --single-transaction --databases {{ test_db_name | default('example_db') }} > /tmp/backup_with_replication.sql"
+  become: true
+
+- name: Fetch file from source host to control node
+  fetch:
+    src: /tmp/backup_with_replication.sql
+    dest: /tmp/backup_with_replication.sql
+    flat: yes
+    run_once: true
+  become: true
+
+
+
+

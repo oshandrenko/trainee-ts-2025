@@ -1,0 +1,10 @@
+default-lease-time 600;
+max-lease-time 7200;
+
+subnet {{ internal_ip | default('192.168.10.1') | regex_replace('\\.\\d+$', '.0') }} netmask 255.255.255.0 {
+    range {{ internal_ip | default('192.168.10.1') | regex_replace('\\.\\d+$', '.100') }} {{ internal_ip | default('192.168.10.1') | regex_replace('\\.\\d+$', '.200') }};
+    option routers {{ internal_ip | default('192.168.10.1') }};
+    option subnet-mask 255.255.255.0;
+    option domain-name-servers {{ internal_ip | default('192.168.10.1') }};
+    option domain-name "{{ zone_name | default('example.com') }}";
+}

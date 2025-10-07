@@ -1,0 +1,87 @@
+---
+- name: Install DHCPD package
+  package:
+    name: "{{ 'dhcp-server' if ansible_os_family == 'RedHat' else 'isc-dhcp-server' }}"
+    state: present
+  register: dhcpd_install
+
+- name: Set IPv4 address for interface
+  community.general.nmcli:
+    conn_name: "{{ router_internal_conn_name | default('enp0s3') }}"
+    type: ethernet
+    state: present
+    ip4: "{{ router_internal_ip | default('192.168.10.1') }}/24"
+    gw4: "{{ router_internal_ip | default('192.168.10.1') }}"
+    method4: manual
+  register: nmcli_config
+  notify: Restart NetworkManager
+
+- name: Enable IP forwarding
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    state: present
+    reload: true
+    sysctl_file: /etc/sysctl.conf
+
+- name: Configure iptables MASQUERADE
+  iptables:
+    table: nat
+    chain: POSTROUTING
+    out_interface: "{{ router_external_conn_name | default('eth0') }}"
+    jump: MASQUERADE
+    state: present
+  register: iptables_config
+  notify: Save iptables rules
+
+- name: Configure port forwarding
+  iptables:
+    table: nat
+    chain: PREROUTING
+    destination: "{{ router_internal_ip | default('192.168.10.1') }}"
+    protocol: tcp
+    destination_port: "{{ item.src_port }}"
+    jump: DNAT
+    to_destination: "{{ item.dest_ip }}:{{ item.dest_port }}"
+    state: present
+  loop: "{{ port_forwarding }}"
+  register: port_forwarding_config
+  notify: Save iptables rules
+
+- name: Setup dhcpd config file
+  template:
+    src: dhcpd.conf.j2
+    dest: "{{ '/etc/dhcp/dhcpd.conf' if ansible_os_family == 'RedHat' else '/etc/dhcp/dhcpd.conf' }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "{{ 'dhcpd -t -cf %s' if ansible_os_family == 'RedHat' else 'dhcpd -t -cf %s' }}"
+  vars:
+    internal_ip: "{{ router_internal_ip | default('192.168.10.1') }}"
+    internal_conn_name: "{{ router_internal_conn_name | default('enp0s3') }}"
+  register: dhcp_load_config
+  notify: Restart DHCP
+
+- name: Configure DHCPD interface
+  lineinfile:
+    path: "{{ '/etc/sysconfig/dhcpd' if ansible_os_family == 'RedHat' else '/etc/default/isc-dhcp-server' }}"
+    regexp: "^DHCPDARGS="
+    line: "DHCPDARGS={{ router_internal_conn_name | default('enp0s3') }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  register: dhcpd_args_config
+  notify: Restart DHCP
+
+- name: Ensure DHCPD service is started and enabled
+  service:
+    name: "{{ 'dhcpd' if ansible_os_family == 'RedHat' else 'isc-dhcp-server' }}"
+    state: started
+    enabled: true
+
+- name: Check DHCPD service status
+  command: systemctl is-active "{{ 'dhcpd' if ansible_os_family == 'RedHat' else 'isc-dhcp-server' }}"
+  register: dhcp_service_status
+  changed_when: false
+  failed_when: dhcp_service_status.rc != 0

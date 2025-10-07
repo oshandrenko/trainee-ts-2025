@@ -1,0 +1,18 @@
+-- Шаблон для настройки сервера-слейва MySQL/MariaDB для репликации
+
+-- Остановка процесса слейва, если он уже запущен
+STOP SLAVE;
+
+-- Настройка подключения слейва к мастеру
+CHANGE MASTER TO
+    MASTER_HOST = '{{ master_host }}',
+    MASTER_USER = '{{ replication_user }}',
+    MASTER_PASSWORD = '{{ replication_password }}',
+    MASTER_LOG_FILE = '{{ master_log_file }}',
+    MASTER_LOG_POS = {{ master_log_pos }};
+
+-- Запуск процесса слейва
+START SLAVE;
+
+-- Проверка статуса слейва
+SHOW SLAVE STATUS\G

@@ -1,0 +1,10 @@
+
+CREATE USER IF NOT EXISTS '{{ replication_user }}'@'{{ private_ip }}'
+IDENTIFIED BY '{{ replication_password }}';
+
+GRANT REPLICATION SLAVE ON *.* TO '{{ replication_user }}'@'{{ private_ip}}';
+
+FLUSH PRIVILEGES;
+
+
+
