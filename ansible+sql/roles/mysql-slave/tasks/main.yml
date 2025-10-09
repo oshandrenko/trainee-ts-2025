@@ -19,7 +19,6 @@
     owner: root
     group: root
     mode: '0644'
-  notify: Restart MySQL
   become: true
 
 - name: Deploy MySQL configuration for slave
@@ -32,7 +31,19 @@
   vars:
     server_id: 2
   register: mysql_conf
-  notify: Restart MySQL
+  become: true
+
+- name: Restart MySQL if configuration files changed
+  service:
+    name: "{{ 'mysqld' if ansible_os_family == 'RedHat' else 'mysql' }}"
+    state: restarted
+  when: mysql_conf.changed
+
+- name: Update CHANGE MASTER TO statement
+  shell: sed -i.bak "s/\\(CHANGE MASTER TO.*MASTER_LOG_FILE='[^']*', *MASTER_LOG_POS=[0-9]*\\)\\(;.*\\)/\\1, MASTER_HOST='{{ master_private_ip }}', MASTER_USER='{{ mysql_repl_user }}', MASTER_PASSWORD='{{ mysql_repl_pass }}'\\2/" /tmp/backup_with_replication.sql
+
+- name: Execute db export
+  shell: "mysql -e 'STOP SLAVE; RESET SLAVE;'"
   become: true
 
 - name: Execute db export
@@ -40,7 +51,7 @@
   become: true
 
 - name: Set master data and start slave
-  shell: mysql -e "CHANGE MASTER TO MASTER_HOST='{{ master_private_ip }}', MASTER_USER='{{ mysql_repl_user }}', MASTER_PASSWORD='{{ mysql_repl_pass }}'; START SLAVE;"
+  shell: mysql -e "START SLAVE;"
   become: true
 
 - name: Check slave status

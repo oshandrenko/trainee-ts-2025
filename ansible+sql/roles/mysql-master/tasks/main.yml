@@ -23,7 +23,12 @@
     server_id: 1
     binlog_do_db: "{{ test_db_name | default('example_db') }}"
   register: mysql_conf
-  notify: Restart MySQL
+  become: true
+
+- name: Force restart mysql
+  service:
+    name: "{{ 'mysqld' if ansible_os_family == 'RedHat' else 'mysql' }}"
+    state: restarted
   become: true
 
 - name: Deploy master replication SQL template
@@ -65,7 +70,6 @@
     src: /tmp/backup_with_replication.sql
     dest: /tmp/backup_with_replication.sql
     flat: yes
-    run_once: true
   become: true
 
 
