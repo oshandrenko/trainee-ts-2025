@@ -1,0 +1,6 @@
+---
+- name: Restart BIND
+  service:
+    name: "{{ 'named' if ansible_os_family == 'RedHat' else 'bind9' }}"
+    state: restarted
+  become: true

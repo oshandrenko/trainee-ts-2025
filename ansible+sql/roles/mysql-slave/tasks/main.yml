@@ -1,0 +1,65 @@
+---
+- name: Install MySQL server and dependencies
+  apt:
+    name: mysql-server
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Ensure MySQL is started and enabled
+  service:
+    name: "{{ 'mysqld' if ansible_os_family == 'RedHat' else 'mysql' }}"
+    enabled: true
+  become: true
+
+- name: Copy file from control node to destination host
+  copy:
+    src: /tmp/backup_with_replication.sql
+    dest: /tmp/backup_with_replication.sql
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+
+- name: Deploy MySQL configuration for slave
+  template:
+    src: my.cnf.j2
+    dest: /etc/mysql/my.cnf
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    server_id: 2
+  register: mysql_conf
+  become: true
+
+- name: Restart MySQL if configuration files changed
+  service:
+    name: "{{ 'mysqld' if ansible_os_family == 'RedHat' else 'mysql' }}"
+    state: restarted
+  when: mysql_conf.changed
+
+- name: Update CHANGE MASTER TO statement
+  shell: sed -i.bak "s/\\(CHANGE MASTER TO.*MASTER_LOG_FILE='[^']*', *MASTER_LOG_POS=[0-9]*\\)\\(;.*\\)/\\1, MASTER_HOST='{{ master_private_ip }}', MASTER_USER='{{ mysql_repl_user }}', MASTER_PASSWORD='{{ mysql_repl_pass }}'\\2/" /tmp/backup_with_replication.sql
+
+- name: Execute db export
+  shell: "mysql -e 'STOP SLAVE; RESET SLAVE;'"
+  become: true
+
+- name: Execute db export
+  shell: "mysql < /tmp/backup_with_replication.sql"
+  become: true
+
+- name: Set master data and start slave
+  shell: mysql -e "START SLAVE;"
+  become: true
+
+- name: Check slave status
+  ansible.builtin.shell: |
+    mysql -e "SHOW SLAVE STATUS\G" | grep -E 'Slave_IO_Running|Slave_SQL_Running|Seconds_Behind_Master'
+  register: slave_status
+  changed_when: false
+
+- name: Display slave status
+  ansible.builtin.debug:
+    msg: "{{ slave_status.stdout_lines }}"

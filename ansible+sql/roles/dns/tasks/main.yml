@@ -1,0 +1,40 @@
+---
+- name: Install BIND package
+  package:
+    name: "{{ 'bind' if ansible_os_family == 'RedHat' else 'bind9' }}"
+    state: present
+  register: bind_install
+
+- name: Ensure BIND configuration directory exists
+  file:
+    path: "{{ '/etc/named' if ansible_os_family == 'RedHat' else '/etc/bind' }}"
+    state: directory
+    owner: root
+    group: "{{ 'named' if ansible_os_family == 'RedHat' else 'bind' }}"
+    mode: "0755"
+
+- name: Deploy BIND main configuration file
+  template:
+    src: named.conf.j2
+    dest: "{{ '/etc/named' if ansible_os_family == 'RedHat' else '/etc/bind' }}/named.conf"
+    owner: root
+    group: "{{ 'named' if ansible_os_family == 'RedHat' else 'bind' }}"
+    mode: "0644"
+    validate: "{{ 'named-checkconf %s' if ansible_os_family == 'RedHat' else 'named-checkconf %s' }}"
+  vars:
+    bind_config_dir: "{{ '/etc/named' if ansible_os_family == 'RedHat' else '/etc/bind' }}"
+    internal_ip: "{{ router_internal_ip | default('192.168.1.1') }}"
+  register: named_conf_copy
+  notify: Restart BIND
+
+- name: Ensure BIND service is started and enabled
+  service:
+    name: "{{ 'named' if ansible_os_family == 'RedHat' else 'bind9' }}"
+    state: started
+    enabled: true
+
+- name: Check BIND service status
+  command: systemctl is-active "{{ 'named' if ansible_os_family == 'RedHat' else 'bind9' }}"
+  register: bind_service_status
+  changed_when: false
+  failed_when: bind_service_status.rc != 0

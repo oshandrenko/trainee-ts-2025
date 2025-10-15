@@ -1,0 +1,15 @@
+---
+- name: Restart DHCP
+  service:
+    name: "{{ 'dhcpd' if ansible_os_family == 'RedHat' else 'isc-dhcp-server' }}"
+    state: restarted
+
+- name: Restart NetworkManager
+  service:
+    name: NetworkManager
+    state: restarted
+
+- name: Save iptables rules
+  shell: iptables-save > /etc/iptables/rules.v4
+  register: iptables_save
+  changed_when: iptables_save.rc == 0

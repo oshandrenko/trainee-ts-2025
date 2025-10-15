@@ -1,0 +1,23 @@
+---
+all_hosts:
+  children:
+    router:
+      hosts:
+        server1:
+          ansible_host: 192.168.88.37
+          ansible_user: root
+          ansible_password: 4321
+    master:
+      hosts:
+        server2:
+          ansible_host: 192.168.88.37
+          ansible_user: root
+          ansible_password: 4321
+          ansible_port: 2022
+    slave:
+      hosts:
+        server3:
+          ansible_host: 192.168.88.37
+          ansible_user: root
+          ansible_password: 4321
+          ansible_port: 3022
