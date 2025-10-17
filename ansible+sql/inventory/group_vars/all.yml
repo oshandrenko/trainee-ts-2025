@@ -1,0 +1,9 @@
+---
+mysql_repl_user: "repl_user"
+mysql_repl_pass: "secure_password"
+master_public_ip:  "{{ hostvars['master']['ansible_host'] }}"
+slave_public_ip:   "{{ hostvars['slave']['ansible_host'] }}"
+master_private_ip: "{{ hostvars['master']['internal_ip'] }}"
+slave_private_ip:  "{{ hostvars['slave']['internal_ip'] }}"
+
+test_db_name: "example_db"

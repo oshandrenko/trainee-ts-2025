@@ -1,0 +1,49 @@
+---
+- name: Install and configure BIND9 DNS server
+  hosts: routers
+  become: true
+
+  tasks:
+    - name: Install BIND package
+      package:
+        name: "{{ 'bind' if ansible_os_family == 'RedHat' else 'bind9' }}"
+        state: present
+      register: bind_install
+
+    - name: Copy named.conf
+      copy:
+        src: named.conf
+        dest: /etc/named.conf
+        owner: root
+        group: root
+        mode: 0644
+      register: named_conf_copy
+
+    - name: Create zone directory
+      file:
+        path: /var/named
+        state: directory
+        owner: named
+        group: named
+        mode: 0755
+
+    - name: Copy zone file
+      copy:
+        src: db.superdomain12.com
+        dest: /var/named/db.superdomain12.com
+        owner: named
+        group: named
+        mode: 0644
+      register: zone_file_copy
+
+    - name: Ensure BIND is started and enabled
+      service:
+        name: "{{ 'named' if ansible_os_family == 'RedHat' else 'bind9' }}"
+        state: started
+        enabled: yes
+
+    - name: Restart BIND if configuration files changed
+      service:
+        name: "{{ 'named' if ansible_os_family == 'RedHat' else 'bind9' }}"
+        state: restarted
+      when: named_conf_copy.changed or zone_file_copy.changed
