@@ -2,13 +2,22 @@ name: Terraform Workflow
 
 on:
   schedule:
-    - cron: '0 5 * * *'  # Ежедневно в 5:00 UTC (8:00 EEST)
-    - cron: '0 15 * * *' # Ежедневно в 15:00 UTC (18:00 EEST)
+    - cron: '0 5 * * *'  # Daily at 5:00 UTC (8:00 EEST) - Include infrastructure
+    - cron: '0 15 * * *' # Daily at 15:00 UTC (18:00 EEST) - Exclude infrastructure
   push:
     branches:
       - dev
     paths:
       - 'terraform/**'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Select action: apply to include infrastructure, destroy to exclude it'
+        required: true
+        type: choice
+        options:
+          - apply
+          - destroy
 
 env:
   WORK_START_HOUR: 5   # 8:00 EEST = 5:00 UTC
@@ -18,85 +27,80 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
 jobs:
-  check-time:
+  check-time-window:
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     outputs:
-      time_window: ${{ steps.check-time.outputs.TIME_WINDOW }}
+      within_window: ${{ steps.check.outputs.within_window }}
     steps:
-      - name: Check if within time window (EEST)
-        id: check-time
+      - name: Determine if within operational time window
+        id: check
         run: |
-          CURRENT_HOUR=$(date -u +%H)
-          if [ $CURRENT_HOUR -ge ${{ env.WORK_START_HOUR }} ] && [ $CURRENT_HOUR -lt ${{ env.WORK_END_HOUR }} ]; then
-            echo "TIME_WINDOW=true" >> $GITHUB_OUTPUT
+          current_hour=$(date -u +%H)
+          if [[ $current_hour -ge ${{ env.WORK_START_HOUR }} && $current_hour -lt ${{ env.WORK_END_HOUR }} ]]; then
+            echo "within_window=true" >> $GITHUB_OUTPUT
           else
-            echo "TIME_WINDOW=false" >> $GITHUB_OUTPUT
+            echo "within_window=false" >> $GITHUB_OUTPUT
           fi
 
-  terraform-plan-apply:
+  terraform-apply:
     runs-on: ubuntu-latest
-    needs: check-time
+    needs: check-time-window
     if: |
       (github.event_name == 'schedule' && github.event.schedule == '0 5 * * *') ||
-      (github.event_name == 'push' && needs.check-time.outputs.time_window == 'true')
+      (github.event_name == 'push' && needs.check-time-window.outputs.within_window == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.action == 'apply')
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: dev
 
-      - name: Setup Terraform
+      - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.13
 
-      - name: Terraform Init
+      - name: Initialize Terraform
         run: terraform init
 
-      - name: Terraform Plan
+      - name: Plan Terraform changes
         id: plan
         run: terraform plan -out=plan.tfplan
 
-      - name: Terraform Apply
+      - name: Apply Terraform changes
         if: steps.plan.outcome == 'success'
         run: terraform apply -auto-approve plan.tfplan
 
   terraform-destroy:
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' && github.event.schedule == '0 15 * * *'
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 15 * * *') ||
+      (github.event_name == 'workflow_dispatch' && inputs.action == 'destroy')
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: dev
 
-      - name: Setup Terraform
+      - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.13
 
-      - name: Debug List files in terraform directory
-        run: |
-          echo "Current directory: $(pwd)"
-          echo "Listing root directory:"
-          ls -la
-          echo "Listing terraform directory:"
-          ls -la ${{ env.TF_WORKING_DIR }}
-
-      - name: Terraform Init
+      - name: Initialize Terraform
         run: terraform init
 
-      - name: Terraform Plan
+      - name: Plan Terraform destruction
         id: plan
-        run: terraform plan -out=plan.tfplan
+        run: terraform plan -destroy -out=plan.tfplan
 
-      - name: Terraform Destroy
+      - name: Apply Terraform destruction
         if: steps.plan.outcome == 'success'
-        run: terraform destroy -auto-approve
+        run: terraform apply -auto-approve plan.tfplan
